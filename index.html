@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>文化祭 順番待ちシステム</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@600;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+:root {
+  --ink: #23282b;
+  --ink-soft: #5b6266;
+  --paper: #ffffff;
+  --paper-tint: #f6f7f8;
+  --line: #e4e7e9;
+  --accent: #d9622a;
+  --accent-soft: #fdece1;
+  --accent-ink: #a8481c;
+  --good: #2f6f5e;
+  --good-soft: #e8f1ee;
+  --radius: 14px;
+  --sans: "Zen Kaku Gothic New", "Noto Sans JP", sans-serif;
+  --serif: "Shippori Mincho", "Noto Serif JP", serif;
+}
+* { box-sizing: border-box; }
+body { margin:0; font-family:var(--sans); background:var(--paper-tint); color:var(--ink); -webkit-font-smoothing:antialiased; }
+
+/* ---------- setup screen ---------- */
+#setup-screen {
+  max-width: 480px; margin: 60px auto; padding: 0 20px; display: none;
+}
+#setup-screen.show { display: block; }
+#setup-screen h1 { font-family: var(--serif); font-size: 1.3rem; }
+#setup-screen p { color: var(--ink-soft); font-size: 0.9rem; line-height: 1.8; }
+#setup-screen textarea {
+  width: 100%; min-height: 140px; padding: 12px; border: 1px solid var(--line);
+  border-radius: 8px; font-family: monospace; font-size: 0.82rem; margin: 12px 0;
+}
+#setup-screen button {
+  padding: 12px 20px; border: none; border-radius: 8px; background: var(--accent);
+  color: #fff; font-weight: 700; cursor: pointer; font-size: 0.95rem;
+}
+#setup-error { color: #b0473f; font-size: 0.85rem; margin-top: 8px; }
+
+/* ---------- staff/display auth gate ---------- */
+#staff-auth-overlay {
+  position: fixed; inset: 0; z-index: 200; background: var(--paper);
+  display: none; align-items: center; justify-content: center; padding: 24px;
+}
+#staff-auth-overlay.show { display: flex; }
+.auth-box { width: 100%; max-width: 340px; text-align: center; }
+.auth-box .brand-mini { font-family: var(--serif); font-size: 1.15rem; font-weight: 700; margin-bottom: 8px; }
+.auth-box p { color: var(--ink-soft); font-size: 0.88rem; line-height: 1.8; margin: 0 0 24px; }
+#staff-auth-form { display: flex; flex-direction: column; gap: 14px; }
+#staff-auth-password {
+  width: 100%; padding: 13px 16px; border: 1px solid var(--line); border-radius: var(--radius);
+  font-size: 0.98rem; font-family: var(--sans); background: var(--paper-tint); text-align: center;
+  outline: none; box-sizing: border-box;
+}
+#staff-auth-password:focus { border-color: var(--accent); background: var(--paper); }
+#staff-auth-error { margin: -4px 0 0; font-size: 0.82rem; color: #b0473f; }
+.auth-remember { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.86rem; color: var(--ink-soft); cursor: pointer; }
+.auth-remember input { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+#staff-auth-form button[type="submit"] {
+  margin-top: 6px; padding: 13px 16px; border: none; border-radius: var(--radius);
+  background: var(--accent); color: #fff; font-size: 0.96rem; font-weight: 700; cursor: pointer; font-family: var(--sans);
+}
+#staff-auth-cancel {
+  margin-top: 4px; background: none; border: none; color: var(--ink-soft); font-size: 0.85rem; cursor: pointer; text-decoration: underline; font-family: var(--sans);
+}
+
+/* ---------- mode switcher ---------- */
+#mode-switcher {
+  display: flex; gap: 8px; padding: 10px 16px; border-bottom: 1px solid var(--line);
+  flex-wrap: wrap; background: var(--paper);
+}
+#mode-switcher button {
+  padding: 6px 14px; border-radius: 999px; border: 1px solid var(--line);
+  background: var(--paper); color: var(--ink-soft); font-size: 0.82rem; font-weight: 600; cursor: pointer;
+  font-family: var(--sans);
+}
+#mode-switcher button.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-ink); }
+
+.page { display: none; }
+.page.active { display: block; }
+
+.wrap { max-width: 480px; margin: 0 auto; padding: 28px 20px 60px; }
+.brand { text-align: center; font-size: 0.82rem; letter-spacing: 0.1em; color: var(--ink-soft); margin-bottom: 6px; }
+.title { text-align: center; font-family: var(--serif); font-size: 1.5rem; margin: 0 0 28px; }
+
+.card { background: var(--paper); border-radius: var(--radius); border: 1px solid var(--line); padding: 28px 24px; margin-bottom: 18px; text-align: center; }
+.card .label { font-size: 0.8rem; color: var(--ink-soft); letter-spacing: 0.05em; margin-bottom: 10px; }
+.big-number { font-family: var(--serif); font-size: 4rem; font-weight: 700; line-height: 1; color: var(--accent); }
+
+.stat-row { display: flex; gap: 12px; }
+.stat-box { flex: 1; background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px 14px; text-align: center; }
+.stat-box .num { font-size: 1.8rem; font-weight: 700; font-family: var(--serif); }
+.stat-box .lbl { font-size: 0.76rem; color: var(--ink-soft); margin-top: 4px; }
+
+button.btn-primary {
+  width: 100%; padding: 18px; border-radius: var(--radius); background: var(--accent);
+  color: #fff; font-size: 1.1rem; font-weight: 700; border: none; cursor: pointer; font-family: var(--sans);
+}
+button.btn-primary:disabled { background: #c9c9c9; cursor: not-allowed; }
+button.btn-secondary {
+  width: 100%; padding: 14px; border-radius: var(--radius); background: var(--paper); border: 1px solid var(--line);
+  color: var(--ink); font-size: 0.95rem; font-weight: 600; cursor: pointer; font-family: var(--sans);
+}
+
+.status-banner { border-radius: var(--radius); padding: 16px; text-align: center; font-weight: 700; font-size: 1rem; margin-bottom: 18px; }
+.status-banner.waiting { background: var(--paper-tint); color: var(--ink-soft); border: 1px solid var(--line); }
+.status-banner.soon { background: var(--accent-soft); color: var(--accent-ink); border: 1px solid var(--accent); }
+.status-banner.now { background: var(--good-soft); color: var(--good); border: 1px solid var(--good); }
+
+.notify-btn { width: 100%; padding: 12px; border-radius: var(--radius); background: var(--paper); border: 1px dashed var(--line); color: var(--ink-soft); font-size: 0.86rem; margin-bottom: 18px; cursor: pointer; font-family: var(--sans); }
+.notify-btn.on { border: 1px solid var(--good); color: var(--good); background: var(--good-soft); }
+
+.staff-call-box { background: var(--ink); color: #fff; border-radius: var(--radius); padding: 32px 24px; text-align: center; margin-bottom: 20px; }
+.staff-call-box .label { color: rgba(255,255,255,0.6); font-size: 0.8rem; margin-bottom: 8px; }
+.staff-call-box .num { font-family: var(--serif); font-size: 3.6rem; font-weight: 700; }
+
+.waiting-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.waiting-chip { background: var(--paper); border: 1px solid var(--line); border-radius: 999px; padding: 8px 16px; font-weight: 700; font-size: 0.95rem; display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.waiting-chip .remove-x { color: var(--ink-soft); font-size: 0.8rem; }
+
+.settings-row { display: flex; align-items: center; gap: 10px; justify-content: center; margin-top: 8px; }
+.settings-row input { width: 60px; padding: 8px; border-radius: 8px; border: 1px solid var(--line); text-align: center; font-size: 0.95rem; }
+
+body.display-mode { background: var(--ink); }
+.display-wrap { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #fff; padding: 20px; }
+.display-title { font-size: 1.4rem; letter-spacing: 0.2em; color: rgba(255,255,255,0.5); margin-bottom: 20px; }
+.display-calling-label { font-size: 1.3rem; color: rgba(255,255,255,0.6); margin-bottom: 10px; }
+.display-number { font-family: var(--serif); font-size: 9rem; font-weight: 700; line-height: 1; color: var(--accent); transition: transform 0.3s ease; }
+.display-number.pulse { transform: scale(1.08); }
+.display-sub { margin-top: 40px; display: flex; gap: 60px; }
+.display-sub .box { text-align: center; }
+.display-sub .box .n { font-size: 2.2rem; font-weight: 700; font-family: var(--serif); }
+.display-sub .box .l { font-size: 0.85rem; color: rgba(255,255,255,0.5); margin-top: 6px; }
+
+.footer-note { text-align: center; font-size: 0.75rem; color: var(--ink-soft); margin-top: 24px; }
+</style>
+</head>
+<body>
+
+<!-- ============== 初回セットアップ画面 ============== -->
+<div id="setup-screen">
+  <div class="brand">初回セットアップ</div>
+  <h1>Firebaseの設定を貼り付けてください</h1>
+  <p>
+    このサイトは、複数の端末でデータを共有するために無料のFirebase(Googleのサービス)を使います。<br>
+    まだ準備がまだの場合は、下の「セットアップ手順を見る」ボタンから作成してください(5分程度で終わります)。
+  </p>
+  <button onclick="window.open('#setup-guide')" style="background:#fff;border:1px solid #e4e7e9;color:#23282b;margin-bottom:16px;">
+    セットアップ手順を見る(下にスクロール)
+  </button>
+  <p>Firebaseの「firebaseConfig」をそのまま下に貼り付けてください。</p>
+  <textarea id="config-input" placeholder='{
+  "apiKey": "...",
+  "authDomain": "...",
+  "databaseURL": "...",
+  "projectId": "...",
+  ...
+}'></textarea>
+  <br>
+  <button onclick="saveConfig()">保存して始める</button>
+  <div id="setup-error"></div>
+
+  <div id="setup-guide" style="margin-top:48px; border-top:1px solid #e4e7e9; padding-top:24px;">
+    <h1 style="font-size:1.1rem;">セットアップ手順(初回のみ・所要5分)</h1>
+    <ol style="color:var(--ink-soft); font-size:0.88rem; line-height:2;">
+      <li><a href="https://console.firebase.google.com/" target="_blank" rel="noopener">Firebase コンソール</a>を開き、Googleアカウントでログインする</li>
+      <li>「プロジェクトを作成」→ 名前を適当に入力(例: bunkasai-queue)→ 作成</li>
+      <li>作成後、左メニューの「構築」→「Realtime Database」を選び、「データベースを作成」</li>
+      <li>ロケーションは任意のもので進み、セキュリティルールは「テストモードで開始」を選ぶ
+        <br>(※文化祭当日限定の一時利用のため。ルールは後述の通り期限付きにできます)</li>
+      <li>左メニューの「プロジェクトの概要」の歯車アイコン →「プロジェクトの設定」を開く</li>
+      <li>下の方の「マイアプリ」で「​&lt;/&gt;（ウェブ）」のアイコンをクリックし、アプリを登録(名前は何でもOK)</li>
+      <li>表示された <code>firebaseConfig = {"{"} ... {"}"}</code> の中身をコピーし、上のテキストエリアに貼り付けて「保存して始める」を押す</li>
+    </ol>
+    <p style="font-size:0.82rem; color:var(--ink-soft);">
+      ※ Realtime Databaseの「ルール」タブで、下記のように設定しておくと、期間限定で読み書きできるようになり安全です(数字は好きな日付に変更してください)。
+    </p>
+    <pre style="background:#f6f7f8; padding:12px; border-radius:8px; font-size:0.78rem; overflow-x:auto;">{
+  "rules": {
+    ".read": "now &lt; 1735689600000",
+    ".write": "now &lt; 1735689600000"
+  }
+}</pre>
+  </div>
+</div>
+
+<!-- ============== スタッフ・大画面用 認証ゲート ============== -->
+<div id="staff-auth-overlay">
+  <div class="auth-box">
+    <div class="brand-mini">STAFF ONLY</div>
+    <p>この先はスタッフ専用です。<br>パスワードを入力してください。</p>
+    <form id="staff-auth-form">
+      <input type="password" id="staff-auth-password" placeholder="パスワード" autocomplete="off" required />
+      <p id="staff-auth-error" style="display:none;">パスワードが違います。</p>
+      <label class="auth-remember">
+        <input type="checkbox" id="staff-auth-remember" />
+        このデバイスを記憶する
+      </label>
+      <button type="submit">入る</button>
+      <button type="button" id="staff-auth-cancel">お客さん用にもどる</button>
+    </form>
+  </div>
+</div>
+
+<!-- ============== メインアプリ ============== -->
+<div id="app-root" style="display:none;">
+  <div id="mode-switcher">
+    <button data-mode="customer" class="active">お客さん用</button>
+    <button data-mode="staff">スタッフ用</button>
+    <button data-mode="display">大画面表示</button>
+  </div>
+
+  <!-- ---- お客さん用 ---- -->
+  <section class="page active" id="page-customer">
+    <div class="wrap">
+      <div class="brand">文化祭 順番待ち受付</div>
+      <h1 class="title">出し物の受付</h1>
+
+      <div id="before-issue">
+        <div class="card">
+          <div class="label">現在の待ち人数</div>
+          <div class="big-number" id="pre-waiting-count">-</div>
+        </div>
+        <button class="btn-primary" id="issue-btn">番号札を発行する</button>
+        <p class="footer-note">発行すると、この画面が自分の番号の待ち状況画面に変わります。</p>
+      </div>
+
+      <div id="after-issue" style="display:none;">
+        <div class="card">
+          <div class="label">あなたの番号</div>
+          <div class="big-number" id="my-number">-</div>
+        </div>
+        <div class="status-banner waiting" id="status-banner">状況を確認しています…</div>
+        <button class="notify-btn" id="notify-btn">🔔 順番が近づいたら通知を受け取る</button>
+        <div class="stat-row">
+          <div class="stat-box"><div class="num" id="ahead-count">-</div><div class="lbl">あなたの前に待っている組数</div></div>
+          <div class="stat-box"><div class="num" id="eta-minutes">-</div><div class="lbl">待ち時間の目安(分)</div></div>
+        </div>
+        <div class="card" style="margin-top:18px;">
+          <div class="label">現在呼び出し中の番号</div>
+          <div class="big-number" id="calling-number-c" style="font-size:2.6rem;">-</div>
+        </div>
+        <p class="footer-note">この画面は自動で更新されます。タブを閉じないでください。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ---- スタッフ用 ---- -->
+  <section class="page" id="page-staff">
+    <div class="wrap">
+      <div class="brand">STAFF ONLY</div>
+      <h1 class="title">受付スタッフ用</h1>
+
+      <div class="staff-call-box">
+        <div class="label">現在呼び出し中</div>
+        <div class="num" id="calling-number-s">-</div>
+      </div>
+
+      <button class="btn-primary" id="call-next-btn">次の番号を呼び出す</button>
+
+      <div class="stat-row" style="margin-top:18px;">
+        <div class="stat-box"><div class="num" id="waiting-count">-</div><div class="lbl">待ち組数</div></div>
+        <div class="stat-box"><div class="num" id="next-number">-</div><div class="lbl">次に発行される番号</div></div>
+      </div>
+
+      <div class="card" style="margin-top:18px; text-align:left;">
+        <div class="label" style="text-align:center;">待っている番号一覧(タップで取り消し)</div>
+        <div class="waiting-list" id="waiting-list"></div>
+      </div>
+
+      <div class="card">
+        <div class="label">1組あたりの目安時間(分)</div>
+        <div class="settings-row">
+          <input type="number" id="avg-minutes-input" min="1" step="1" />
+          <button class="btn-secondary" id="save-avg-btn" style="width:auto; padding:8px 16px;">変更</button>
+        </div>
+      </div>
+
+      <button class="btn-secondary" id="reset-btn" style="margin-top:10px; color:#b0473f;">すべてリセット(当日の開始時など)</button>
+
+      <p class="footer-note">この画面はスタッフだけが操作してください。</p>
+    </div>
+  </section>
+
+  <!-- ---- 大画面表示 ---- -->
+  <section class="page" id="page-display">
+    <div class="display-wrap">
+      <div class="display-title">呼び出し番号</div>
+      <div class="display-calling-label">ただいまお呼びしている番号</div>
+      <div class="display-number" id="calling-number-d">-</div>
+      <div class="display-sub">
+        <div class="box"><div class="n" id="waiting-count-d">-</div><div class="l">待ち組数</div></div>
+        <div class="box"><div class="n" id="eta-minutes-d">-</div><div class="l">待ち時間目安(分)</div></div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script>
+// ============================================================
+// 設定の保存・読込
+// ============================================================
+const CONFIG_KEY = "bunkasai_queue_firebase_config";
+
+// ---------- スタッフ用・大画面表示用の合言葉 ----------
+// ここには平文のパスワードではなく「ハッシュ値」を書きます。
+// パスワードを変更したい場合は、以前お渡しした「パスワード作成ツール」で
+// 新しいハッシュ値を作り、下の値を書き換えてください。
+// (下の値はダミーです。実際のパスワードのハッシュ値に差し替えてください)
+const STAFF_PASSWORD_HASH = "4858d9d1c6b90ff3b9bd46bf93b8eb9c065b35eeb44561dd3c46420847a45107";
+const STAFF_REMEMBER_KEY = "bunkasai_queue_staff_remember";
+
+function getSavedConfig() {
+  try {
+    const raw = localStorage.getItem(CONFIG_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function saveConfig() {
+  const raw = document.getElementById("config-input").value.trim();
+  const errorEl = document.getElementById("setup-error");
+  errorEl.textContent = "";
+
+  let config = null;
+
+  // まずは厳密なJSONとして読み込みを試す
+  try {
+    config = JSON.parse(raw);
+  } catch (e) {
+    // JSONで失敗した場合、Firebaseコンソールのコピペ(クォートなしキーのJS形式)を
+    // JSONに変換してから再度試す
+    try {
+      let fixed = raw;
+      // 前後に const firebaseConfig = ... ; が付いていたら取り除く
+      fixed = fixed.replace(/^[\s\S]*?(\{[\s\S]*\})[\s\S]*$/, "$1");
+      // キー名にクォートを付ける (例: apiKey: → "apiKey":)
+      fixed = fixed.replace(/([{,]\s*)([A-Za-z0-9_$]+)(\s*:)/g, '$1"$2"$3');
+      // 末尾のカンマ(トレイリングカンマ)を削除
+      fixed = fixed.replace(/,(\s*[}\]])/g, "$1");
+      config = JSON.parse(fixed);
+    } catch (e2) {
+      errorEl.textContent = "読み込めませんでした。Firebaseのfirebaseconfigの中身({ }を含む部分)をそのまま貼り付けてください。";
+      return;
+    }
+  }
+
+  if (!config || !config.databaseURL) {
+    errorEl.textContent = "databaseURL が見つかりません。Firebaseの設定全体を貼り付けてください。";
+    return;
+  }
+  localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+  location.reload();
+}
+
+const savedConfig = getSavedConfig();
+
+// ---------- スタッフ認証まわり ----------
+async function sha256Hex(text) {
+  const enc = new TextEncoder().encode(text);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", enc);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+function isStaffRemembered() {
+  return localStorage.getItem(STAFF_REMEMBER_KEY) === "true";
+}
+
+let pendingStaffMode = null; // 認証待ちの遷移先("staff" or "display")
+
+function requestStaffAccess(targetMode, onSuccessCallback) {
+  if (isStaffRemembered()) {
+    onSuccessCallback(targetMode);
+    return;
+  }
+  pendingStaffMode = { targetMode, onSuccessCallback };
+  document.getElementById("staff-auth-overlay").classList.add("show");
+  document.getElementById("staff-auth-password").value = "";
+  document.getElementById("staff-auth-error").style.display = "none";
+  document.getElementById("staff-auth-password").focus();
+}
+
+document.getElementById("staff-auth-cancel").addEventListener("click", () => {
+  document.getElementById("staff-auth-overlay").classList.remove("show");
+  pendingStaffMode = null;
+});
+
+document.getElementById("staff-auth-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const input = document.getElementById("staff-auth-password");
+  const rememberBox = document.getElementById("staff-auth-remember");
+  const errorEl = document.getElementById("staff-auth-error");
+  const inputHash = await sha256Hex(input.value);
+
+  if (inputHash === STAFF_PASSWORD_HASH) {
+    if (rememberBox.checked) {
+      localStorage.setItem(STAFF_REMEMBER_KEY, "true");
+    }
+    document.getElementById("staff-auth-overlay").classList.remove("show");
+    if (pendingStaffMode) {
+      pendingStaffMode.onSuccessCallback(pendingStaffMode.targetMode);
+      pendingStaffMode = null;
+    }
+  } else {
+    errorEl.style.display = "block";
+    input.value = "";
+    input.focus();
+  }
+});
+
+if (!savedConfig) {
+  document.getElementById("setup-screen").classList.add("show");
+} else {
+  initApp(savedConfig);
+}
+
+function initApp(config) {
+  firebase.initializeApp(config);
+  const db = firebase.database();
+  const stateRef = db.ref("queueState");
+
+  const DEFAULT_STATE = {
+    nextNumber: 1,
+    calling: null,
+    waitingList: [],
+    calledHistory: [],
+    avgMinutesPerGroup: 3,
+  };
+
+  // 初回だけ初期値を書き込む
+  stateRef.once("value", (snap) => {
+    if (!snap.exists()) {
+      stateRef.set(DEFAULT_STATE);
+    }
+  });
+
+  document.getElementById("app-root").style.display = "block";
+
+  let currentState = DEFAULT_STATE;
+
+  // ---------- モード切り替え ----------
+  const modeButtons = document.querySelectorAll("#mode-switcher button");
+  const pages = { customer: "page-customer", staff: "page-staff", display: "page-display" };
+
+  function switchToMode(targetMode) {
+    modeButtons.forEach((b) => b.classList.toggle("active", b.dataset.mode === targetMode));
+    Object.values(pages).forEach((id) => document.getElementById(id).classList.remove("active"));
+    document.getElementById(pages[targetMode]).classList.add("active");
+    document.body.classList.toggle("display-mode", targetMode === "display");
+  }
+
+  modeButtons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const targetMode = btn.dataset.mode;
+      if (targetMode === "staff" || targetMode === "display") {
+        requestStaffAccess(targetMode, switchToMode);
+      } else {
+        switchToMode(targetMode);
+      }
+    });
+  });
+
+  // ---------- お客さん用ロジック ----------
+  const MY_NUMBER_KEY = "queue_my_number";
+  const NOTIFY_KEY = "queue_notify_enabled";
+  const NOTIFIED_SOON_KEY = "queue_notified_soon";
+  const NOTIFIED_NOW_KEY = "queue_notified_now";
+
+  let myNumber = sessionStorage.getItem(MY_NUMBER_KEY) ? Number(sessionStorage.getItem(MY_NUMBER_KEY)) : null;
+  const beforeIssue = document.getElementById("before-issue");
+  const afterIssue = document.getElementById("after-issue");
+  const issueBtn = document.getElementById("issue-btn");
+  const notifyBtn = document.getElementById("notify-btn");
+
+  function updateNotifyBtnLabel() {
+    const enabled = localStorage.getItem(NOTIFY_KEY) === "true";
+    notifyBtn.classList.toggle("on", enabled);
+    notifyBtn.textContent = enabled ? "🔔 通知はオンになっています" : "🔔 順番が近づいたら通知を受け取る";
+  }
+  updateNotifyBtnLabel();
+
+  notifyBtn.addEventListener("click", async () => {
+    if (!("Notification" in window)) {
+      alert("このブラウザは通知に対応していません。画面を見て確認してください。");
+      return;
+    }
+    const perm = await Notification.requestPermission();
+    localStorage.setItem(NOTIFY_KEY, perm === "granted" ? "true" : "false");
+    if (perm !== "granted") alert("通知が許可されませんでした。画面を見て順番を確認してください。");
+    updateNotifyBtnLabel();
+  });
+
+  function showIssuedView() {
+    beforeIssue.style.display = "none";
+    afterIssue.style.display = "block";
+    document.getElementById("my-number").textContent = myNumber;
+  }
+  if (myNumber !== null) showIssuedView();
+
+  issueBtn.addEventListener("click", () => {
+    issueBtn.disabled = true;
+    issueBtn.textContent = "発行しています…";
+    stateRef.transaction((s) => {
+      if (!s) s = DEFAULT_STATE;
+      const num = s.nextNumber;
+      s.nextNumber = num + 1;
+      s.waitingList = [...(s.waitingList || []), num];
+      s._justIssued = num; // 一時的に使う
+      return s;
+    }, (error, committed, snap) => {
+      if (committed) {
+        const val = snap.val();
+        myNumber = val._justIssued;
+        sessionStorage.setItem(MY_NUMBER_KEY, String(myNumber));
+        sessionStorage.removeItem(NOTIFIED_SOON_KEY);
+        sessionStorage.removeItem(NOTIFIED_NOW_KEY);
+        showIssuedView();
+      } else {
+        issueBtn.disabled = false;
+        issueBtn.textContent = "番号札を発行する";
+      }
+    });
+  });
+
+  function notify(title, body) {
+    if (localStorage.getItem(NOTIFY_KEY) === "true" && Notification.permission === "granted") {
+      try { new Notification(title, { body }); } catch (e) {}
+    }
+    if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+  }
+
+  function applyCustomerState(state) {
+    document.getElementById("pre-waiting-count").textContent = (state.waitingList || []).length;
+    if (myNumber === null) return;
+
+    document.getElementById("calling-number-c").textContent = state.calling ?? "-";
+
+    const waitingList = state.waitingList || [];
+    const aheadCount = waitingList.filter((n) => n < myNumber).length;
+    const isWaitingInLine = waitingList.includes(myNumber);
+    const isBeingCalled = state.calling === myNumber;
+    const isPast = !isWaitingInLine && !isBeingCalled && (state.calledHistory || []).includes(myNumber);
+
+    const banner = document.getElementById("status-banner");
+    const etaEl = document.getElementById("eta-minutes");
+    const aheadEl = document.getElementById("ahead-count");
+
+    if (isBeingCalled) {
+      banner.className = "status-banner now";
+      banner.textContent = "あなたの番号が呼ばれています！受付へお越しください";
+      aheadEl.textContent = "0"; etaEl.textContent = "0";
+      if (sessionStorage.getItem(NOTIFIED_NOW_KEY) !== "true") {
+        notify("順番が来ました", `番号 ${myNumber} 番の方、受付へお越しください。`);
+        sessionStorage.setItem(NOTIFIED_NOW_KEY, "true");
+      }
+    } else if (isPast) {
+      banner.className = "status-banner waiting";
+      banner.textContent = "受付は終了しました";
+      aheadEl.textContent = "-"; etaEl.textContent = "-";
+    } else if (isWaitingInLine) {
+      aheadEl.textContent = aheadCount;
+      etaEl.textContent = Math.round(aheadCount * state.avgMinutesPerGroup);
+      if (aheadCount <= 1) {
+        banner.className = "status-banner soon";
+        banner.textContent = "まもなくあなたの番号が呼ばれます";
+        if (sessionStorage.getItem(NOTIFIED_SOON_KEY) !== "true") {
+          notify("もうすぐ順番です", `番号 ${myNumber} 番の方、あと${aheadCount}組で呼び出しです。`);
+          sessionStorage.setItem(NOTIFIED_SOON_KEY, "true");
+        }
+      } else {
+        banner.className = "status-banner waiting";
+        banner.textContent = `あと ${aheadCount} 組でお呼びします`;
+      }
+    } else {
+      banner.className = "status-banner waiting";
+      banner.textContent = "状況を確認しています…";
+    }
+  }
+
+  // ---------- スタッフ用ロジック ----------
+  const callNextBtn = document.getElementById("call-next-btn");
+  const resetBtn = document.getElementById("reset-btn");
+  const saveAvgBtn = document.getElementById("save-avg-btn");
+  const avgInput = document.getElementById("avg-minutes-input");
+
+  callNextBtn.addEventListener("click", () => {
+    stateRef.transaction((s) => {
+      if (!s) return s;
+      const list = s.waitingList || [];
+      if (list.length === 0) return s;
+      const called = list[0];
+      s.waitingList = list.slice(1);
+      s.calling = called;
+      s.calledHistory = [called, ...(s.calledHistory || [])].slice(0, 5);
+      return s;
+    });
+  });
+
+  resetBtn.addEventListener("click", () => {
+    if (!confirm("本当にすべてリセットしますか?待ち人数・番号がすべて0に戻ります。")) return;
+    stateRef.transaction((s) => ({
+      nextNumber: 1, calling: null, waitingList: [], calledHistory: [],
+      avgMinutesPerGroup: (s && s.avgMinutesPerGroup) || 3,
+    }));
+  });
+
+  saveAvgBtn.addEventListener("click", () => {
+    const minutes = Number(avgInput.value);
+    if (!minutes || minutes <= 0) { alert("1以上の数字を入力してください。"); return; }
+    stateRef.child("avgMinutesPerGroup").set(minutes);
+  });
+
+  function applyStaffState(state) {
+    document.getElementById("calling-number-s").textContent = state.calling ?? "-";
+    const waitingList = state.waitingList || [];
+    document.getElementById("waiting-count").textContent = waitingList.length;
+    document.getElementById("next-number").textContent = state.nextNumber;
+    if (document.activeElement !== avgInput) avgInput.value = state.avgMinutesPerGroup;
+
+    const listEl = document.getElementById("waiting-list");
+    listEl.innerHTML = "";
+    waitingList.forEach((n) => {
+      const chip = document.createElement("div");
+      chip.className = "waiting-chip";
+      chip.innerHTML = `${n}<span class="remove-x">✕</span>`;
+      chip.addEventListener("click", () => {
+        if (confirm(`番号 ${n} を待ちリストから削除しますか?`)) {
+          stateRef.transaction((s) => {
+            if (!s) return s;
+            s.waitingList = (s.waitingList || []).filter((x) => x !== n);
+            return s;
+          });
+        }
+      });
+      listEl.appendChild(chip);
+    });
+  }
+
+  // ---------- 大画面表示ロジック ----------
+  let lastCalling = null;
+  function applyDisplayState(state) {
+    const el = document.getElementById("calling-number-d");
+    el.textContent = state.calling ?? "-";
+    const waitingList = state.waitingList || [];
+    document.getElementById("waiting-count-d").textContent = waitingList.length;
+    document.getElementById("eta-minutes-d").textContent = Math.round(waitingList.length * state.avgMinutesPerGroup);
+    if (state.calling !== null && state.calling !== lastCalling) {
+      el.classList.remove("pulse");
+      void el.offsetWidth;
+      el.classList.add("pulse");
+    }
+    lastCalling = state.calling;
+  }
+
+  // ---------- 全画面へ反映 ----------
+  stateRef.on("value", (snap) => {
+    const state = snap.val() || DEFAULT_STATE;
+    currentState = state;
+    applyCustomerState(state);
+    applyStaffState(state);
+    applyDisplayState(state);
+  });
+}
+</script>
+
+</body>
+</html>
