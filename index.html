@@ -309,12 +309,46 @@ body.display-mode { background: var(--ink); }
 // ============================================================
 const CONFIG_KEY = "bunkasai_queue_firebase_config";
 
+// ============================================================
+// ↓↓↓ ここに、先生(サーバー管理者)が1回だけFirebaseの設定を書き込みます ↓↓↓
+// これを設定しておけば、このサイトを開いた人全員が自動で同じデータベースに
+// 繋がるようになり、一人ひとりが設定を貼り付ける必要がなくなります。
+//
+// 書き方: Firebaseコンソールでコピーした firebaseConfig の中身を
+// そのまま(クォートが無いキーの形式のままでもOK)ここに貼り付けてください。
+//
+// 例:
+// const FIREBASE_CONFIG = {
+//   apiKey: "AIzaSyA9pnx4rFb8WCumaPKhHH2pvnCCfX_IgTs",
+//   authDomain: "bunkasai-queue.firebaseapp.com",
+//   databaseURL: "https://bunkasai-queue-default-rtdb.asia-southeast1.firebasedatabase.app",
+//   projectId: "bunkasai-queue",
+//   storageBucket: "bunkasai-queue.firebasestorage.app",
+//   messagingSenderId: "203953705451",
+//   appId: "1:203953705451:web:bccfbb0908b04430a909ae",
+// };
+//
+// 何も設定しない場合(null のまま)は、開いた人がその場でブラウザに
+// 設定を貼り付ける、これまで通りの画面が表示されます。
+const FIREBASE_CONFIG = {
+    apiKey: "AIzaSyA9pnx4rFb8WCumaPKhHH2pvnCCfX_IgTs",
+    authDomain: "bunkasai-queue.firebaseapp.com",
+    databaseURL: "https://bunkasai-queue-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "bunkasai-queue",
+    storageBucket: "bunkasai-queue.firebasestorage.app",
+    messagingSenderId: "203953705451",
+    appId: "1:203953705451:web:bccfbb0908b04430a909ae",
+    measurementId: "G-9WE5TRJHNL"
+  };
+// ↑↑↑ ここまで ↑↑↑
+// ============================================================
+
 // ---------- スタッフ用・大画面表示用の合言葉 ----------
 // ここには平文のパスワードではなく「ハッシュ値」を書きます。
 // パスワードを変更したい場合は、以前お渡しした「パスワード作成ツール」で
 // 新しいハッシュ値を作り、下の値を書き換えてください。
 // (下の値はダミーです。実際のパスワードのハッシュ値に差し替えてください)
-const STAFF_PASSWORD_HASH = "4858d9d1c6b90ff3b9bd46bf93b8eb9c065b35eeb44561dd3c46420847a45107";
+const STAFF_PASSWORD_HASH = "REPLACE_WITH_YOUR_HASH";
 const STAFF_REMEMBER_KEY = "bunkasai_queue_staff_remember";
 
 function getSavedConfig() {
@@ -362,7 +396,7 @@ function saveConfig() {
   location.reload();
 }
 
-const savedConfig = getSavedConfig();
+const savedConfig = FIREBASE_CONFIG || getSavedConfig();
 
 // ---------- スタッフ認証まわり ----------
 async function sha256Hex(text) {
