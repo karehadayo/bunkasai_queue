@@ -259,9 +259,19 @@ body.display-mode { background: var(--ink); }
       <div class="staff-call-box">
         <div class="label">現在呼び出し中</div>
         <div class="num" id="calling-number-s">-</div>
+        <div id="calling-timeout-note" style="font-size:0.78rem; color:rgba(255,255,255,0.6); margin-top:8px; display:none;"></div>
       </div>
 
       <button class="btn-primary" id="call-next-btn">次の番号を呼び出す</button>
+
+      <div class="card" style="margin-top:18px;">
+        <div class="label">番号の照合(お客さんの番号を確認)</div>
+        <div class="settings-row">
+          <input type="number" id="verify-number-input" placeholder="番号" style="width:100px;" />
+          <button class="btn-secondary" id="verify-btn" style="width:auto; padding:8px 16px;">確認する</button>
+        </div>
+        <div id="verify-result" style="margin-top:12px; font-weight:700; font-size:0.95rem;"></div>
+      </div>
 
       <div class="stat-row" style="margin-top:18px;">
         <div class="stat-box"><div class="num" id="waiting-count">-</div><div class="lbl">待ち組数</div></div>
@@ -279,6 +289,17 @@ body.display-mode { background: var(--ink); }
           <input type="number" id="avg-minutes-input" min="1" step="1" />
           <button class="btn-secondary" id="save-avg-btn" style="width:auto; padding:8px 16px;">変更</button>
         </div>
+      </div>
+
+      <div class="card">
+        <div class="label">呼び出し後、何分で自動的にスキップするか</div>
+        <div class="settings-row">
+          <input type="number" id="timeout-minutes-input" min="1" step="1" />
+          <button class="btn-secondary" id="save-timeout-btn" style="width:auto; padding:8px 16px;">変更</button>
+        </div>
+        <p style="font-size:0.78rem; color:var(--ink-soft); text-align:center; margin:10px 0 0;">
+          この時間内に「番号の照合」で確認が取れないと、その番号は列の最後尾に戻り、自動的に次の番号が呼び出されます。
+        </p>
       </div>
 
       <button class="btn-secondary" id="reset-btn" style="margin-top:10px; color:#b0473f;">すべてリセット(当日の開始時など)</button>
@@ -466,9 +487,11 @@ function initApp(config) {
   const DEFAULT_STATE = {
     nextNumber: 1,
     calling: null,
+    callingAt: null,       // 現在の番号を呼び出した時刻(ミリ秒)
     waitingList: [],
     calledHistory: [],
     avgMinutesPerGroup: 3,
+    timeoutMinutes: 5,     // 呼び出し後、この分数で自動スキップ
   };
 
   // 初回だけ初期値を書き込む
@@ -626,25 +649,38 @@ function initApp(config) {
   const resetBtn = document.getElementById("reset-btn");
   const saveAvgBtn = document.getElementById("save-avg-btn");
   const avgInput = document.getElementById("avg-minutes-input");
+  const timeoutInput = document.getElementById("timeout-minutes-input");
+  const saveTimeoutBtn = document.getElementById("save-timeout-btn");
+  const verifyInput = document.getElementById("verify-number-input");
+  const verifyBtn = document.getElementById("verify-btn");
+  const verifyResult = document.getElementById("verify-result");
+
+  function callNextInTransaction(s) {
+    if (!s) return s;
+    const list = s.waitingList || [];
+    if (list.length === 0) {
+      s.calling = null;
+      s.callingAt = null;
+      return s;
+    }
+    const called = list[0];
+    s.waitingList = list.slice(1);
+    s.calling = called;
+    s.callingAt = Date.now();
+    s.calledHistory = [called, ...(s.calledHistory || [])].slice(0, 5);
+    return s;
+  }
 
   callNextBtn.addEventListener("click", () => {
-    stateRef.transaction((s) => {
-      if (!s) return s;
-      const list = s.waitingList || [];
-      if (list.length === 0) return s;
-      const called = list[0];
-      s.waitingList = list.slice(1);
-      s.calling = called;
-      s.calledHistory = [called, ...(s.calledHistory || [])].slice(0, 5);
-      return s;
-    });
+    stateRef.transaction(callNextInTransaction);
   });
 
   resetBtn.addEventListener("click", () => {
     if (!confirm("本当にすべてリセットしますか?待ち人数・番号がすべて0に戻ります。")) return;
     stateRef.transaction((s) => ({
-      nextNumber: 1, calling: null, waitingList: [], calledHistory: [],
+      nextNumber: 1, calling: null, callingAt: null, waitingList: [], calledHistory: [],
       avgMinutesPerGroup: (s && s.avgMinutesPerGroup) || 3,
+      timeoutMinutes: (s && s.timeoutMinutes) || 5,
     }));
   });
 
@@ -654,12 +690,79 @@ function initApp(config) {
     stateRef.child("avgMinutesPerGroup").set(minutes);
   });
 
+  saveTimeoutBtn.addEventListener("click", () => {
+    const minutes = Number(timeoutInput.value);
+    if (!minutes || minutes <= 0) { alert("1以上の数字を入力してください。"); return; }
+    stateRef.child("timeoutMinutes").set(minutes);
+  });
+
+  // ---------- 番号の照合 ----------
+  verifyBtn.addEventListener("click", () => {
+    const num = Number(verifyInput.value);
+    if (!num) {
+      verifyResult.textContent = "番号を入力してください。";
+      verifyResult.style.color = "#5b6266";
+      return;
+    }
+    if (currentState.calling === num) {
+      verifyResult.textContent = `番号 ${num} は現在呼び出し中の番号と一致しています。`;
+      verifyResult.style.color = "#2f6f5e";
+      // 一致確認できたら、呼び出し中フラグを解除しておく(次の呼び出しに備える)
+      stateRef.transaction((s) => {
+        if (!s) return s;
+        if (s.calling === num) {
+          s.calling = null;
+          s.callingAt = null;
+        }
+        return s;
+      });
+      verifyInput.value = "";
+    } else {
+      verifyResult.textContent = `番号 ${num} は、現在呼び出し中の番号(${currentState.calling ?? "-"})と一致しません。`;
+      verifyResult.style.color = "#b0473f";
+    }
+  });
+
+  // ---------- 自動タイムアウト監視 ----------
+  // この画面(スタッフ用・大画面表示用)を開いている誰かがいれば、
+  // 一定間隔でタイムアウトをチェックし、超過していれば自動的にスキップします。
+  setInterval(() => {
+    if (!currentState || currentState.calling === null || !currentState.callingAt) return;
+    const timeoutMs = (currentState.timeoutMinutes || 5) * 60 * 1000;
+    const elapsed = Date.now() - currentState.callingAt;
+    if (elapsed >= timeoutMs) {
+      stateRef.transaction((s) => {
+        if (!s || s.calling === null || !s.callingAt) return s;
+        const stillElapsed = Date.now() - s.callingAt;
+        const stillTimeoutMs = (s.timeoutMinutes || 5) * 60 * 1000;
+        if (stillElapsed < stillTimeoutMs) return s; // 直前に照合が済んでいた場合など
+        // タイムアウトした番号を列の最後尾に戻す
+        s.waitingList = [...(s.waitingList || []), s.calling];
+        s.calling = null;
+        s.callingAt = null;
+        // 続けて次の番号を自動的に呼び出す
+        return callNextInTransaction(s);
+      });
+    }
+  }, 10000); // 10秒ごとにチェック
+
   function applyStaffState(state) {
     document.getElementById("calling-number-s").textContent = state.calling ?? "-";
+    const timeoutNote = document.getElementById("calling-timeout-note");
+    if (state.calling !== null && state.callingAt) {
+      const timeoutMs = (state.timeoutMinutes || 5) * 60 * 1000;
+      const remainMs = Math.max(0, timeoutMs - (Date.now() - state.callingAt));
+      const remainMin = Math.ceil(remainMs / 60000);
+      timeoutNote.style.display = "block";
+      timeoutNote.textContent = `あと約${remainMin}分で自動スキップされます`;
+    } else {
+      timeoutNote.style.display = "none";
+    }
     const waitingList = state.waitingList || [];
     document.getElementById("waiting-count").textContent = waitingList.length;
     document.getElementById("next-number").textContent = state.nextNumber;
     if (document.activeElement !== avgInput) avgInput.value = state.avgMinutesPerGroup;
+    if (document.activeElement !== timeoutInput) timeoutInput.value = state.timeoutMinutes || 5;
 
     const listEl = document.getElementById("waiting-list");
     listEl.innerHTML = "";
