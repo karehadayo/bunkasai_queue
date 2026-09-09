@@ -126,6 +126,25 @@ button.btn-secondary {
 .settings-row { display: flex; align-items: center; gap: 10px; justify-content: center; margin-top: 8px; }
 .settings-row input { width: 60px; padding: 8px; border-radius: 8px; border: 1px solid var(--line); text-align: center; font-size: 0.95rem; }
 
+/* ---------- 空席ありモード トグル ---------- */
+.toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.toggle-switch { position: relative; width: 50px; height: 28px; flex-shrink: 0; }
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.toggle-slider {
+  position: absolute; cursor: pointer; inset: 0; background: #ccc; border-radius: 999px; transition: 0.2s;
+}
+.toggle-slider::before {
+  content: ""; position: absolute; height: 22px; width: 22px; left: 3px; bottom: 3px;
+  background: #fff; border-radius: 50%; transition: 0.2s;
+}
+.toggle-switch input:checked + .toggle-slider { background: var(--good); }
+.toggle-switch input:checked + .toggle-slider::before { transform: translateX(22px); }
+
+.seats-banner {
+  background: var(--good-soft); border: 1px solid var(--good); color: var(--good);
+  border-radius: var(--radius); padding: 14px; text-align: center; font-weight: 700; font-size: 0.95rem; margin-bottom: 18px;
+}
+
 body.display-mode { background: var(--ink); }
 .display-wrap { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #fff; padding: 20px; }
 .display-title { font-size: 1.4rem; letter-spacing: 0.2em; color: rgba(255,255,255,0.5); margin-bottom: 20px; }
@@ -222,6 +241,9 @@ body.display-mode { background: var(--ink); }
       <h1 class="title">出し物の受付</h1>
 
       <div id="before-issue">
+        <div id="seats-available-banner" class="seats-banner" style="display:none;">
+          ただいま席に余裕があります。発行するとそのまま入場できます
+        </div>
         <div class="card">
           <div class="label">現在の待ち人数</div>
           <div class="big-number" id="pre-waiting-count">-</div>
@@ -235,15 +257,23 @@ body.display-mode { background: var(--ink); }
           <div class="label">あなたの番号</div>
           <div class="big-number" id="my-number">-</div>
         </div>
-        <div class="status-banner waiting" id="status-banner">状況を確認しています…</div>
-        <button class="notify-btn" id="notify-btn">🔔 順番が近づいたら通知を受け取る</button>
-        <div class="stat-row">
-          <div class="stat-box"><div class="num" id="ahead-count">-</div><div class="lbl">あなたの前に待っている組数</div></div>
-          <div class="stat-box"><div class="num" id="eta-minutes">-</div><div class="lbl">待ち時間の目安(分)</div></div>
+
+        <div id="pass-through-view" style="display:none;">
+          <div class="status-banner now">そのまま入場できます！受付へお越しください</div>
+          <p class="footer-note">番号札の確認のため、受付でこの番号をお伝えください。</p>
         </div>
-        <div class="card" style="margin-top:18px;">
-          <div class="label">現在呼び出し中の番号</div>
-          <div class="big-number" id="calling-number-c" style="font-size:2.6rem;">-</div>
+
+        <div id="normal-wait-view">
+          <div class="status-banner waiting" id="status-banner">状況を確認しています…</div>
+          <button class="notify-btn" id="notify-btn">🔔 順番が近づいたら通知を受け取る</button>
+          <div class="stat-row">
+            <div class="stat-box"><div class="num" id="ahead-count">-</div><div class="lbl">あなたの前に待っている組数</div></div>
+            <div class="stat-box"><div class="num" id="eta-minutes">-</div><div class="lbl">待ち時間の目安(分)</div></div>
+          </div>
+          <div class="card" style="margin-top:18px;">
+            <div class="label">現在呼び出し中の番号</div>
+            <div class="big-number" id="calling-number-c" style="font-size:2.6rem;">-</div>
+          </div>
         </div>
         <p class="footer-note">この画面は自動で更新されます。タブを閉じないでください。</p>
       </div>
@@ -260,6 +290,19 @@ body.display-mode { background: var(--ink); }
         <div class="label">現在呼び出し中</div>
         <div class="num" id="calling-number-s">-</div>
         <div id="calling-timeout-note" style="font-size:0.78rem; color:rgba(255,255,255,0.6); margin-top:8px; display:none;"></div>
+      </div>
+
+      <div class="card">
+        <div class="toggle-row">
+          <div style="text-align:left;">
+            <div class="label" style="margin:0 0 4px;">空席ありモード</div>
+            <div style="font-size:0.78rem; color:var(--ink-soft);">ONの間に発行された番号は、並ばずそのまま入場できます</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="seats-available-toggle" />
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
       </div>
 
       <button class="btn-primary" id="call-next-btn">次の番号を呼び出す</button>
@@ -492,6 +535,8 @@ function initApp(config) {
     calledHistory: [],
     avgMinutesPerGroup: 3,
     timeoutMinutes: 5,     // 呼び出し後、この分数で自動スキップ
+    seatsAvailableMode: false, // ONの間に発行された番号は列に並ばずそのまま入場OK
+    passThroughList: [],       // 空席ありモードで「そのまま通した」番号の記録
   };
 
   // 初回だけ初期値を書き込む
@@ -529,15 +574,20 @@ function initApp(config) {
 
   // ---------- お客さん用ロジック ----------
   const MY_NUMBER_KEY = "queue_my_number";
+  const MY_PASS_THROUGH_KEY = "queue_my_pass_through";
   const NOTIFY_KEY = "queue_notify_enabled";
   const NOTIFIED_SOON_KEY = "queue_notified_soon";
   const NOTIFIED_NOW_KEY = "queue_notified_now";
 
   let myNumber = sessionStorage.getItem(MY_NUMBER_KEY) ? Number(sessionStorage.getItem(MY_NUMBER_KEY)) : null;
+  let myIsPassThrough = sessionStorage.getItem(MY_PASS_THROUGH_KEY) === "true";
   const beforeIssue = document.getElementById("before-issue");
   const afterIssue = document.getElementById("after-issue");
   const issueBtn = document.getElementById("issue-btn");
   const notifyBtn = document.getElementById("notify-btn");
+  const seatsAvailableBanner = document.getElementById("seats-available-banner");
+  const passThroughView = document.getElementById("pass-through-view");
+  const normalWaitView = document.getElementById("normal-wait-view");
 
   function updateNotifyBtnLabel() {
     const enabled = localStorage.getItem(NOTIFY_KEY) === "true";
@@ -561,6 +611,8 @@ function initApp(config) {
     beforeIssue.style.display = "none";
     afterIssue.style.display = "block";
     document.getElementById("my-number").textContent = myNumber;
+    passThroughView.style.display = myIsPassThrough ? "block" : "none";
+    normalWaitView.style.display = myIsPassThrough ? "none" : "block";
   }
   if (myNumber !== null) showIssuedView();
 
@@ -571,14 +623,21 @@ function initApp(config) {
       if (!s) s = DEFAULT_STATE;
       const num = s.nextNumber;
       s.nextNumber = num + 1;
-      s.waitingList = [...(s.waitingList || []), num];
+      if (s.seatsAvailableMode) {
+        s.passThroughList = [...(s.passThroughList || []), num];
+      } else {
+        s.waitingList = [...(s.waitingList || []), num];
+      }
       s._justIssued = num; // 一時的に使う
+      s._justIssuedPassThrough = !!s.seatsAvailableMode;
       return s;
     }, (error, committed, snap) => {
       if (committed) {
         const val = snap.val();
         myNumber = val._justIssued;
+        myIsPassThrough = !!val._justIssuedPassThrough;
         sessionStorage.setItem(MY_NUMBER_KEY, String(myNumber));
+        sessionStorage.setItem(MY_PASS_THROUGH_KEY, myIsPassThrough ? "true" : "false");
         sessionStorage.removeItem(NOTIFIED_SOON_KEY);
         sessionStorage.removeItem(NOTIFIED_NOW_KEY);
         showIssuedView();
@@ -598,7 +657,10 @@ function initApp(config) {
 
   function applyCustomerState(state) {
     document.getElementById("pre-waiting-count").textContent = (state.waitingList || []).length;
+    seatsAvailableBanner.style.display = state.seatsAvailableMode ? "block" : "none";
+
     if (myNumber === null) return;
+    if (myIsPassThrough) return; // そのまま通した人は、待ち行列の計算は不要
 
     document.getElementById("calling-number-c").textContent = state.calling ?? "-";
 
@@ -654,6 +716,11 @@ function initApp(config) {
   const verifyInput = document.getElementById("verify-number-input");
   const verifyBtn = document.getElementById("verify-btn");
   const verifyResult = document.getElementById("verify-result");
+  const seatsAvailableToggle = document.getElementById("seats-available-toggle");
+
+  seatsAvailableToggle.addEventListener("change", () => {
+    stateRef.child("seatsAvailableMode").set(seatsAvailableToggle.checked);
+  });
 
   function callNextInTransaction(s) {
     if (!s) return s;
@@ -681,6 +748,8 @@ function initApp(config) {
       nextNumber: 1, calling: null, callingAt: null, waitingList: [], calledHistory: [],
       avgMinutesPerGroup: (s && s.avgMinutesPerGroup) || 3,
       timeoutMinutes: (s && s.timeoutMinutes) || 5,
+      seatsAvailableMode: false,
+      passThroughList: [],
     }));
   });
 
@@ -748,6 +817,7 @@ function initApp(config) {
 
   function applyStaffState(state) {
     document.getElementById("calling-number-s").textContent = state.calling ?? "-";
+    seatsAvailableToggle.checked = !!state.seatsAvailableMode;
     const timeoutNote = document.getElementById("calling-timeout-note");
     if (state.calling !== null && state.callingAt) {
       const timeoutMs = (state.timeoutMinutes || 5) * 60 * 1000;
